@@ -7,7 +7,7 @@
 #define LINE_SIZE 512
 
 
-int run(int16_t *program, int position)
+int run(int32_t *program, int position)
 {
     int op1, op2, res;
 
@@ -32,7 +32,7 @@ int run(int16_t *program, int position)
     return -1;
 }
 
-void parse_program(const char *filename, int16_t *program)
+void parse_program(const char *filename, int32_t *program)
 {
     int i = 0;
     FILE *f = fopen(filename, "r");
@@ -54,9 +54,10 @@ void parse_program(const char *filename, int16_t *program)
 }
 
 
+
 int main(int argc, char **argv) {
     int position = 0;
-    int16_t program[PROGRAM_SIZE];
+    int32_t program[PROGRAM_SIZE];
 
     parse_program(argv[1], program);
     
