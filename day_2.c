@@ -7,12 +7,11 @@
 #define LINE_SIZE 512
 
 
-int run(int32_t *program, int position)
+int run_inst(int32_t *program, int position)
 {
     int op1, op2, res;
 
     if (program[position] == 99) {
-        printf("End of program .. program[0] is %d\n", program[0]);
         return -1;
     }
 
@@ -32,7 +31,15 @@ int run(int32_t *program, int position)
     return -1;
 }
 
-void parse_program(const char *filename, int32_t *program)
+int run(int32_t *program)
+{
+    int position = 0;
+    while(position >= 0)
+       position = run_inst(program, position);
+    return program[0];
+}
+
+int parse_program(const char *filename, int32_t *program)
 {
     int i = 0;
     FILE *f = fopen(filename, "r");
@@ -51,19 +58,30 @@ void parse_program(const char *filename, int32_t *program)
     printf("Program size %d\n", i);
     printf("Program start is %d %d %d %d ...\n", program[0], program[1], program[2], program[3]);
     printf("Program end is %d %d\n", program[i-2], program[i-1]);
+    return i;
 }
 
 
 
 int main(int argc, char **argv) {
-    int position = 0;
+    int ip = 0, size;
+    int noun, verb;
     int32_t program[PROGRAM_SIZE];
+    int32_t program_instance[PROGRAM_SIZE];
 
-    parse_program(argv[1], program);
-    
-    while(position >= 0)
-       position = run(program, position);
-
+    size = parse_program(argv[1], program);
+    for (noun = 0; noun <= 99; noun++) {
+        for (verb = 0; verb <= 99; verb++) {
+            memcpy(program_instance, program, 4 * size);
+            program_instance[1] = noun;
+            program_instance[2] = verb;
+            if (run(program_instance) == 19690720)
+                break;
+        }
+        if (verb != 100)
+            break;
+    }
+    printf("noun %d, verb %d\n", noun, verb);
     return 0;
 }
 
