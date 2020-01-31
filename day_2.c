@@ -36,38 +36,29 @@ void parse_program(const char *filename, int16_t *program)
 {
     int i = 0;
     FILE *f = fopen(filename, "r");
-    char line[LINE_SIZE];
-    char *token;
+    char *token = NULL;
+    size_t token_size = 1;
     const char sep[2] = ",";
 
     if (!f) {
-        printf("COuld not open file\n");
+        printf("Could not open file\n");
         exit(-1);
     }
-    if (fgets(line, LINE_SIZE, f) == NULL) {
-        printf("Could not read file\n");
-        exit(-1);
-    }
-
-    if (!feof(f)) {
-        printf("Program line too long ...\n");
-        exit(-1);
-    }
-
-    token = strtok(line, sep);
-    while (token != NULL && i < PROGRAM_SIZE) {
+    while (getdelim(&token, &token_size, ',', f) > 0) {
         program[i++] = atoi(token);
-        token = strtok(NULL, sep);
     }
-    printf("Program is %d %d %d %d ...\n", program[0], program[1], program[2], program[3]);
+    free(token);
+    printf("Program size %d\n", i);
+    printf("Program start is %d %d %d %d ...\n", program[0], program[1], program[2], program[3]);
+    printf("Program end is %d %d\n", program[i-2], program[i-1]);
 }
 
 
-int main(void) {
+int main(int argc, char **argv) {
     int position = 0;
     int16_t program[PROGRAM_SIZE];
 
-    parse_program("day_2.input", program);
+    parse_program(argv[1], program);
     
     while(position >= 0)
        position = run(program, position);
