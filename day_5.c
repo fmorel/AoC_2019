@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "intcode.h"
 
@@ -7,10 +8,12 @@
 int main(int argc, char **argv)
 {
     int32_t program[PROGRAM_SIZE];
-    int input[1] = {1};
+    int input[1];
     int output[64];
     int size, i;
     Context ctx;
+
+    input[0] = atoi(argv[2]);
 
     ctx.input = input;
     ctx.input_idx = 0;

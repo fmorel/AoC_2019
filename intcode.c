@@ -37,19 +37,41 @@ static int run_inst(Context *ctx, int position)
     }
     switch(opcode) {
         case 1:
+            /* Add */
             prog[op3] = get_param(prog, par_mode[0], op1) + 
                         get_param(prog, par_mode[1], op2);
             return position + 4;
         case 2:
+            /* Mult */
             prog[op3] = get_param(prog, par_mode[0], op1) * 
                         get_param(prog, par_mode[1], op2);
             return position + 4;
         case 3:
+            /* Store input */
             prog[op1] = ctx->input[ctx->input_idx++];
             return position + 2;
         case 4:
+            /* Output */
             ctx->output[ctx->output_idx++] = get_param(prog, par_mode[0], op1);
             return position + 2;
+        case 5:
+            /* Jump if true */
+            if (get_param(prog, par_mode[0], op1))
+                return get_param(prog, par_mode[1], op2);
+            return position + 3;
+        case 6:
+            /* Jump if false */
+            if (!get_param(prog, par_mode[0], op1))
+                return get_param(prog, par_mode[1], op2);
+            return position + 3;
+        case 7:
+            /* Less than */
+            prog[op3] = (get_param(prog, par_mode[0], op1) < get_param(prog, par_mode[1], op2));
+            return position + 4;
+        case 8:
+            /* Equal */
+            prog[op3] = (get_param(prog, par_mode[0], op1) == get_param(prog, par_mode[1], op2));
+            return position + 4; 
         default:
             printf("Opcode error\n");
             return -1;
