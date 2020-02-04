@@ -5,7 +5,7 @@
 int check_rule(int number)
 {
     int dig1, dig2;
-    int has_double = 0;
+    int has_double = 0, cur_nuple = 0;
     int i;
 
     dig1 = number % 10;
@@ -15,11 +15,16 @@ int check_rule(int number)
         number /= 10;
         if (dig2 > dig1)
             return 0;
-        if (dig2 == dig1)
-            has_double = 1;
+        if (dig2 == dig1) {
+            cur_nuple++;
+        } else {
+            if (cur_nuple == 1)
+                has_double = 1;
+            cur_nuple = 0;
+        }
         dig1 = dig2;
     }
-    return has_double;
+    return has_double || (cur_nuple==1);
 }
 
 int main(int argc, char **argv)
@@ -30,7 +35,7 @@ int main(int argc, char **argv)
     start = atoi(argv[1]);
     end = atoi(argv[2]);
 
-    printf("check_rule %d %d %d\n", check_rule(111111), check_rule(223450), check_rule(123789));
+    printf("check_rule %d %d %d %d\n", check_rule(112233), check_rule(123444), check_rule(111122), check_rule(112222));
 
     for (i = start; i <= end; i++) {
         passwords += check_rule(i);
