@@ -32,9 +32,60 @@ static uint32_t get_name(char *str)
     return (str[2] << 16) | (str[1] << 8) | str[0];
 }
 
-static uint32_t get_idx(Universe *u, Body *b)
+static int get_idx(Universe *u, Body *b)
 {
     return (b - u->bodies);
+}
+
+static Body *get_master(Universe *u, Body *b)
+{
+    return &u->bodies[b->m_idx];
+}
+
+static int *get_master_chain(Universe *u, int idx)
+{
+    int *ret;
+    Body *b = &u->bodies[idx];
+    int i, n;
+
+    n = b->n_orbits;
+    ret = malloc(n * sizeof(int));
+    for (i = 0; i < n; i++) {
+        ret[i] = b->m_idx;
+        b = get_master(u, b);
+    }
+    return ret;
+}
+
+static int find_common_ancestor(Universe *u, int *chain1, int len1, int *chain2, int len2)
+{
+    int i, j;
+    int small_len, *small_chain, big_len, *big_chain;
+
+    if (len1 < len2) {
+        small_len = len1;
+        small_chain = chain1;
+        big_len = len2;
+        big_chain = chain2;
+    } else {
+        small_len = len2;
+        small_chain = chain2;
+        big_len = len1;
+        big_chain = chain1;
+    }
+
+    for (i = 0; i < small_len; i++) {
+        for (j = i; j < big_len; j++) {
+            if (big_chain[j] == small_chain[i])
+                goto found;
+        }
+    }
+
+found: 
+    if (big_chain[j] == small_chain[i])
+        return big_chain[j];
+
+    return -1;
 }
 
 static Body *add_body(Universe *u, Body *b)
@@ -114,6 +165,8 @@ int parse_orbits(const char *filename, Universe *u)
 }
 
 
+
+
 int main(int argc, char **argv)
 {
     int i, n, n_orbits;
@@ -128,6 +181,25 @@ int main(int argc, char **argv)
         n_orbits += count_orbits_inner(&u, i);
     }
     printf("Total orbits is %d\n", n_orbits);
+
+    Body *you, *san, *common;
+    int *you_chain, *san_chain;
+    int common_idx;
+    
+    you = find_body(&u, get_name("YOU"));
+    san = find_body(&u, get_name("SAN"));
+    you_chain = get_master_chain(&u, get_idx(&u, you));
+    san_chain = get_master_chain(&u, get_idx(&u, san));
+    common_idx = find_common_ancestor(&u, you_chain, you->n_orbits, san_chain, san->n_orbits);
+    free(you_chain);
+    free(san_chain);
+    if (common_idx < 0) {
+        printf("Error : no common ancestor between YOU and SAN \n");
+        exit(1);
+    }
+    common = &u.bodies[common_idx];
+    n_orbits = you->n_orbits + san->n_orbits - 2 * common->n_orbits - 2;
+    printf("Minimal transfer is %d hops\n", n_orbits);
 
     free(u.bodies);
     return 0;
