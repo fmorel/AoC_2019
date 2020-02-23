@@ -53,6 +53,7 @@ static int run_inst(Context *ctx, int position)
         case 4:
             /* Output */
             ctx->output[ctx->output_idx++] = get_param(prog, par_mode[0], op1);
+            ctx->pause_on_output = 1;
             return position + 2;
         case 5:
             /* Jump if true */
@@ -84,6 +85,14 @@ int run(Context *ctx)
     while(position >= 0)
        position = run_inst(ctx, position);
     return ctx->program[0];
+}
+
+int resume_till_output(Context *ctx, int cur_pos)
+{
+    ctx->pause_on_output = 0;
+    while (cur_pos >= 0 && !ctx->pause_on_output)
+        cur_pos = run_inst(ctx, cur_pos);
+    return cur_pos;
 }
 
 int parse_program(const char *filename, int32_t *program)
