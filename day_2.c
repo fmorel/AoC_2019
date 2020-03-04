@@ -10,8 +10,8 @@
 int main(int argc, char **argv) {
     int ip = 0, size;
     int noun, verb;
-    int32_t program[PROGRAM_SIZE];
-    int32_t program_instance[PROGRAM_SIZE];
+    int64_t program[PROGRAM_SIZE];
+    int64_t program_instance[PROGRAM_SIZE];
     Context ctx;
 
     ctx.input = NULL;

@@ -7,9 +7,9 @@
 
 int main(int argc, char **argv)
 {
-    int32_t program[PROGRAM_SIZE];
-    int input[1];
-    int output[64];
+    int64_t program[PROGRAM_SIZE];
+    int64_t input[1];
+    int64_t output[64];
     int size, i;
     Context ctx;
 

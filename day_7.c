@@ -16,20 +16,20 @@ typedef struct {
 void alloc_amplifier(Context *amp, int prog_size)
 {
     /* Init bigger in/out spaces for step 2 */
-    amp->input = malloc(FEEDBACK_N_LOOP * sizeof(int));
-    amp->output = malloc(FEEDBACK_N_LOOP * sizeof(int));
-    amp->program = malloc(prog_size * sizeof(int32_t));
+    amp->input = malloc(FEEDBACK_N_LOOP * sizeof(int64_t));
+    amp->output = malloc(FEEDBACK_N_LOOP * sizeof(int64_t));
+    amp->program = malloc(prog_size * sizeof(int64_t));
 }
 
-void init_amplifier(Context *amp, int32_t *prog, int prog_size, int *phase, int amp_idx)
+void init_amplifier(Context *amp, int64_t *prog, int prog_size, int *phase, int amp_idx)
 {
     amp->input_idx = 0;
     amp->input[0] = phase[amp_idx];
     amp->output_idx = 0;
-    memcpy(amp->program, prog, prog_size * sizeof(int32_t));
+    memcpy(amp->program, prog, prog_size * sizeof(int64_t));
 }
 
-int run_amplifiers(Context *amp, int32_t *prog, int prog_size, PhaseSettings *s, int idx)
+int run_amplifiers(Context *amp, int64_t *prog, int prog_size, PhaseSettings *s, int idx)
 {
     int i;
     int *phase = s->settings[idx];
@@ -46,7 +46,7 @@ int run_amplifiers(Context *amp, int32_t *prog, int prog_size, PhaseSettings *s,
     return inout_value;
 }
 
-int run_amplifiers_feedback(Context *amps, int32_t *prog, int prog_size, PhaseSettings *s, int idx)
+int run_amplifiers_feedback(Context *amps, int64_t *prog, int prog_size, PhaseSettings *s, int idx)
 {
     int *phase = s->settings[idx];
     int inout_value = 0;
@@ -141,7 +141,7 @@ void heappermute(int *v, int n, PhaseSettings *s) {
     }
 }
 
-void step1(int32_t *program, int size)
+void step1(int64_t *program, int size)
 {
     Context amp;
     PhaseSettings *s;
@@ -170,7 +170,7 @@ void step1(int32_t *program, int size)
     dump_setting(s, idx_max);
 }
 
-void step2(int32_t *program, int size)
+void step2(int64_t *program, int size)
 {
     Context amps[5];
     PhaseSettings *s;
@@ -203,7 +203,7 @@ void step2(int32_t *program, int size)
 
 int main(int argc, char **argv)
 {
-    int32_t program[PROGRAM_SIZE];
+    int64_t program[PROGRAM_SIZE];
     int size;
     
     size = parse_program(argv[1], program);
