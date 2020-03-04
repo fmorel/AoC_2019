@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <assert.h>
-
 
 typedef struct {
     char *data;
@@ -15,6 +13,7 @@ typedef struct {
     int width;
     int height;
     Layer *layers;
+    Layer render;
 } Image;
 
 static int parse_image(char *filename, Image *img)
@@ -65,6 +64,20 @@ static int free_image(Image *img)
     }
     free(img->layers);
 }
+
+static void print_image(Image *img)
+{
+    int i, j, k;
+    for (i = 0, k = 0; i < img->height; i++) {
+        for (j = 0; j < img->width; j++, k++) {
+            if (img->render.data[k])
+                printf("|");
+            else
+                printf(" ");
+        }
+        printf("\n");
+    }
+}
     
 static int fewest_zero(Image *img)
 {
@@ -83,6 +96,25 @@ static int fewest_zero(Image *img)
 }
 
 
+static void render_image(Image *img)
+{
+    int i, j, size;
+    Layer *l;
+    
+    size = img->width * img->height;
+    img->render.data = malloc(size);
+    memset(img->render.data, 2, size);
+
+    for (i = 0; i < img->n_layers; i++) {
+        l = &img->layers[i];
+        for (j = 0; j < size; j++) {
+            if (img->render.data[j] == 2)
+                img->render.data[j] = l->data[j];
+        }
+    }
+}
+
+
 int main(int argc, char **argv)
 {
     Image img;
@@ -94,6 +126,9 @@ int main(int argc, char **argv)
         goto cleanup;
 
     printf("Day 1 %d\n", fewest_zero(&img));
+
+    render_image(&img);
+    print_image(&img);
 
 cleanup:
     free_image(&img);
