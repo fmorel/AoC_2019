@@ -1,4 +1,4 @@
-all: day_2 day_3 day_4 day_5_9 day_6 day_7 day_8
+all: day_2 day_3 day_4 day_5_9 day_6 day_7 day_8 day_10
 
 CFLAGS+= -g
 
