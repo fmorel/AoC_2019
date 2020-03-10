@@ -27,10 +27,15 @@ static void add_asteroid(AsteroidField *f, int x, int y)
     a->y = y;
 }
 
-/* Basic Euclid's algorithm to fetch GCD between a and b */
+/* Basic Euclid's algorithm to fetch unsigned GCD between a and b */
 static int gcd (int a, int b)
 {
     int temp;
+    /* Unsign the GCD !*/
+    if (a < 0)
+        a = -a;
+    if (b < 0)
+        b = -b;
     if (b > a) {
         temp = a;
         a = b;
@@ -52,59 +57,91 @@ static void get_los_unit_vector(const Asteroid *a, const Asteroid *b, int *vx, i
     dy = b->y - a->y;
     
     g = gcd(dx, dy);
-    /* Unsigned the GCD !*/
-    if (g < 0)
-        g = -g;
     *vx = dx / g;
     *vy = dy / g;
 }
 
-/* Use a mask representing the whole field as seen by an asteroid. A bit to 1 means the position is blocked*/
-/* There are height elements in mask of size width each (width < 64) */
-static int mask_point(const AsteroidField *f, uint64_t *mask, int x, int y)
+#define ASTEROID_BIT 0
+#define MASK_BIT 1
+#define CENTER_BIT 2
+/* Represent asteroid field with a bitmap containing relevant information 
+ * Returns 0 if coordiantes are outside the field*/
+static int mask_point(const AsteroidField *f, uint8_t *field_bmp, int x, int y)
 {
     if ((x >= f->width) || (x < 0) || (y >= f->height) || (y < 0))
         return 0;
-    mask[y] |= (1 << x);
+    field_bmp[y * f->width + x] |= (1 << MASK_BIT);
     return 1;
 }
 
-static int is_masked(const Asteroid *a, const uint64_t *mask)
+static int is_masked(const AsteroidField *f, const Asteroid *a, const uint8_t *field_bmp)
 {
-    return (mask[a->y] & (1 << a->x));
+    return ((field_bmp[a->y * f->width + a->x] >> MASK_BIT) & 1);
 }
 
-static int examine_asteroid(AsteroidField *f, int idx)
+void dump_field(const AsteroidField *f, uint8_t *field_bmp)
+{
+    int i,j;
+    uint8_t val;
+    for (i = 0; i < f->height; i++) {
+        for (j = 0; j < f->width; j++) {
+            val = field_bmp[i * f->width + j];
+            if (val == 0) {
+                printf(" ");
+                continue;
+            }
+            if (val & (1<<CENTER_BIT))
+                printf("o");
+            else if (val & (1<<MASK_BIT)) {
+                if (val & (1<<ASTEROID_BIT))
+                    printf("x");
+                else
+                    printf("-");
+            } else if (val & (1<<ASTEROID_BIT))
+                printf("*");
+        }
+        printf("\n");
+    }
+}
+
+static int examine_asteroid(AsteroidField *f, int idx, int do_dump)
 {
     int i, vx, vy, px, py;
     Asteroid *a = &f->asts[idx];
-    uint64_t *mask;
+    uint8_t *field_bmp;
 
     /* Use 64 bit for a line of asteroid field since width < 64 */
-    mask = calloc(f->height, sizeof(uint64_t));
+    field_bmp = calloc(f->height * f->width, 1);
+    field_bmp[a->y * f->width + a->x] = (1 << CENTER_BIT);
 
     /* Scan all the asteroids and create mask */
     for (i = 0; i < f->n_asts; i++) {
         if (i == idx)
             continue;
+        field_bmp[f->asts[i].y * f->width + f->asts[i].x] |= (1 << ASTEROID_BIT);
         get_los_unit_vector(a, &f->asts[i], &vx, &vy);
         /* Mask all the points behind asteroid i in the line of sight */
         px = f->asts[i].x + vx;
         py = f->asts[i].y + vy;
-        while (mask_point(f, mask, px, py)) {
+        while (mask_point(f, field_bmp, px, py)) {
             px += vx;
             py += vy;
         }
     }
+    
     /* Count the unmasked asteroids */
     a->n_detect = 0;
     for (i = 0; i < f->n_asts; i++) {
         if (i == idx)
             continue;
-        if (is_masked(&f->asts[i], mask))
+        if (is_masked(f, &f->asts[i], field_bmp))
             continue;
         a->n_detect++;
     }
+    
+    if (do_dump)
+        dump_field(f, field_bmp);
+    free(field_bmp);
     return a->n_detect;
 }
 
@@ -134,6 +171,7 @@ static int parse_asteroids(const char *filename, AsteroidField *field)
         }
         n_lines++;
     }
+    free(line);
     field->width = width;
     field->height = n_lines;
 
@@ -163,15 +201,17 @@ int main(int argc, char **argv)
 
     /* Step 1 */
     for (i = 0; i < field.n_asts; i++) {
-        n = examine_asteroid(&field, i);
+        n = examine_asteroid(&field, i, 0);
         if (n > n_max) {
             n_max = n;
             i_max = i;
         }
     }
-    printf("Best asteroid is at (%d,%d) with %d detected asteroids\n",
-        field.asts[i_max].x, field.asts[i_max].y, n_max);
+    printf("Best asteroid is %d at (%d,%d) with %d detected asteroids\n",
+        i_max, field.asts[i_max].x, field.asts[i_max].y, n_max);
     //debug(&field);
+    examine_asteroid(&field, i_max, 1);
 
+    free(field.asts);
     return 0;
 }
