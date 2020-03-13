@@ -6,7 +6,7 @@
 #include "intcode.h"
 
 #define PROGRAM_SIZE 640
-#define GRID_SIZE 256
+#define GRID_SIZE 96
 #define INPUT_SIZE 32
 
 #define PAINT_BIT (1 << 7)
@@ -31,6 +31,8 @@ typedef struct {
 void init_grid(void)
 {
     memset(grid, 0, sizeof(grid));
+    /* Step 2 */
+    grid[(GRID_SIZE/2) * GRID_SIZE + (GRID_SIZE/2)] = 1;
 }
 
 void init_robot(Robot *r, int64_t *program)
@@ -41,8 +43,15 @@ void init_robot(Robot *r, int64_t *program)
     r->dir = ROBOT_UP;
     r->n_painted_once = 0;
     r->brain.program = program;
+    r->brain.relative_base = 0;
     r->brain.input = malloc(INPUT_SIZE * sizeof(int64_t));
     r->brain.output = malloc(2*sizeof(int64_t));
+}
+
+void free_robot(Robot *r)
+{
+    free(r->brain.input);
+    free(r->brain.output);
 }
 
 void step_robot(Robot *r)
@@ -65,7 +74,6 @@ void step_robot(Robot *r)
         printf("Robot out of the grid (%d,%d)\n", r->x, r->y);
         exit(-1);
     }
-    printf("%d : (%d,%d)\n", r->dir, r->x, r->y);
 }
 
 void run_robot(Robot *r)
@@ -100,14 +108,27 @@ void run_robot(Robot *r)
     }
 }
 
-
+void display_grid(void)
+{
+    int i, j;
+    for (i = 0; i < GRID_SIZE - 1; i++) {
+        for (j = 0; j < GRID_SIZE; j++) {
+            if ((grid[i*GRID_SIZE + j] & 0x7F))
+                printf("-");
+            else
+                printf(" ");
+        }
+        printf("\n");
+    }
+}
 
 int main(int argc, char **argv)
 {
-    int64_t program[PROGRAM_SIZE];
+    int64_t *program;
     Robot robot;
     int size;
     
+    program = malloc(PROGRAM_SIZE * sizeof(int64_t));
     size = parse_program(argv[1], program);
     if (size > PROGRAM_SIZE) {
         printf("Program too big %d\n", size);
@@ -118,6 +139,11 @@ int main(int argc, char **argv)
     init_robot(&robot, program);
     run_robot(&robot);
     printf("Number of panels painted once %d\n", robot.n_painted_once);
+    
+    display_grid();
+    
+    free_robot(&robot);
+    free(program);
 
     return 0;
 }
