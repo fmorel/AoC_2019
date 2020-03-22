@@ -11,6 +11,9 @@ typedef struct {
     int z;
 } Vector;
 
+#define DIM(v, d) (*(((int *)&(v)) + d))
+
+
 static inline void add(Vector *c, const Vector *a, const Vector *b)
 {
     c->x = a->x + b->x;
@@ -74,6 +77,35 @@ static void velocity_step(Body *moons, int n_moons)
     }
 }
 
+static long long gcd (long long a, long long b)
+{
+    long long temp;
+    if (b > a) {
+        temp = a;
+        a = b;
+        b = temp;
+    }
+    while (b != 0) {
+        temp = a % b;
+        a = b;
+        b = temp;
+    }
+    return a;
+}
+
+static int check_period(Body *moons, Body *start_pos, int n_moons, int dim)
+{
+    int i;
+    int vel, pos;
+    for (i = 0; i < n_moons; i++) {
+        vel = DIM(moons[i].vel, dim);
+        pos = DIM(moons[i].pos, dim);
+        if (vel != 0 || pos != DIM(start_pos[i].pos, dim))
+            return 0;
+    }
+    return 1;
+}
+
 static void print_moons(Body *moons, int n_moons)
 {
     int i;
@@ -126,28 +158,55 @@ static int parse_initial_position(Body *moons, const char *filename)
         i++;
     }
 
-    printf ("%d bodies initialized\n", i);
     return i;
 }
 
 
 int main(int argc, char **argv)
 {
-    Body moons[4];
+    Body moons[4], start_pos[4];
     int n_moons;
-    int i, n_steps = atoi(argv[2]);
+    int i, d, n_steps = atoi(argv[2]);
     int energy;
+    long long period[3], g, total_period;
     
     n_moons = parse_initial_position(moons, argv[1]);
+    printf("%d moons\n", n_moons);
     if (n_moons != 4)
         return -1;
 
+    memcpy(start_pos, moons, sizeof(start_pos));
+    memset(period, 0, sizeof(period));
+
+    /* Step 2 : three dimensions are actually completely independent
+     * and the total periodicity is the LCM of periodicity for each dimension ... */
     for (i = 0; i < n_steps; i++) {
         gravity_step(moons, n_moons);
         velocity_step(moons, n_moons);
+        for (d = 0; d < 3; d++) {
+            if (period[d])
+                continue;
+            if (check_period(moons, start_pos, n_moons, d)) {
+                period[d] = i+1;
+                printf("Period for dimension %d is %d\n", d, i+1);
+            }
+        }
     }
+    /* Step 1 */
     energy = get_energy(moons, n_moons);
     printf("Total energy %d\n", energy);
+
+    /* Step 2 */
+    if (!period[0] || !period[1] || !period[2]) {
+        printf("Not all periods found, increase steps ...\n");
+        return -1;
+    }
+    /* Compute LCM of the periods */
+    g = gcd(period[0], period[1]);
+    total_period = (period[0] * period[1]) / g;
+    g = gcd(total_period, period[2]);
+    total_period = (total_period * period[2]) / g;
+    printf("Total period %ld\n", total_period);
 
     return 0;
 }
