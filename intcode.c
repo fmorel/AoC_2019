@@ -38,7 +38,7 @@ static void set_param(Context *ctx, int par_mode, int64_t op, int64_t value)
     }
 }
 
-static int run_inst(Context *ctx, int position)
+int run_inst(Context *ctx, int position)
 {
     int64_t op1, op2, op3, inst, opcode;
     int par_mode[3], i;
@@ -75,13 +75,17 @@ static int run_inst(Context *ctx, int position)
             return position + 4;
         case 3:
             /* Store input */
+            if (ctx->pause_on_input) {
+                ctx->pause_on_input = 0;
+                return position;
+            }
             set_param(ctx, par_mode[0], op1,
                 ctx->input[ctx->input_idx++]);
             return position + 2;
         case 4:
             /* Output */
             ctx->output[ctx->output_idx++] = get_param(ctx, par_mode[0], op1);
-            ctx->pause_on_output = 1;
+            ctx->output_triggered = 1;
             return position + 2;
         case 5:
             /* Jump if true */
@@ -125,12 +129,35 @@ int run(Context *ctx)
     return ctx->program[0];
 }
 
+int resume_till_event(Context *ctx, int *p_event, int cur_pos)
+{
+    int input_bit = (*p_event & INTCODE_EVENT_INPUT);
+    int output_bit = (*p_event & INTCODE_EVENT_OUTPUT);
+    
+    if (input_bit)
+        ctx->pause_on_input = 1;
+    if (output_bit)
+        ctx->output_triggered = 0;
+        
+    while (cur_pos >=0) {
+        cur_pos = run_inst(ctx, cur_pos);
+        if (input_bit && !ctx->pause_on_input) {
+            *p_event = input_bit;
+            break;
+        }
+        if (output_bit && ctx->output_triggered) {
+            *p_event = output_bit;
+            break;
+        }
+    }
+
+    return cur_pos;
+}
+
 int resume_till_output(Context *ctx, int cur_pos)
 {
-    ctx->pause_on_output = 0;
-    while (cur_pos >= 0 && !ctx->pause_on_output)
-        cur_pos = run_inst(ctx, cur_pos);
-    return cur_pos;
+    int event = INTCODE_EVENT_OUTPUT;
+    return resume_till_event(ctx, &event, cur_pos);
 }
 
 int parse_program(const char *filename, int64_t *program)

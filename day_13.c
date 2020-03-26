@@ -13,8 +13,14 @@ typedef struct {
     SDL_Window *win;
     SDL_Renderer *ren;
     SDL_Texture *tiles;
-    SDL_Texture *buffer;
 } SDLContext;
+
+typedef struct {
+    SDLContext sdl; /* Graphics */
+    Context ctx;    /* Intcode Game engine */
+    int x_ball;
+    int x_paddle;
+} Game;
 
 #define SDL_ERROR(str) \
     printf(#str "error: %d\n", SDL_GetError()); \
@@ -24,7 +30,7 @@ typedef struct {
 #define TILE_SIZE 16    /* Tile size in pixel */
 #define WIDTH 44        /* Game width and height, in tiles */
 #define HEIGHT 22
-#define TICK_MS 300
+#define TICK_MS 200
 
 void sdl_init(SDLContext *c)
 {
@@ -45,14 +51,6 @@ void sdl_init(SDLContext *c)
 	SDL_DestroyWindow(c->win);
         SDL_ERROR(Renderer);
     }
-    /* Framebuffer */
-    c->buffer = SDL_CreateTexture(c->ren, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, w, h);
-    if (!c->buffer) {
-        SDL_DestroyRenderer(c->ren);
-        SDL_DestroyWindow(c->win);
-        SDL_ERROR(Buffer);
-    }
-    SDL_SetRenderTarget(c->ren, c->buffer);
     
     /* Load tiles texture */
     SDL_Surface *img = SDL_LoadBMP("breakout_tiles.bmp"); 
@@ -69,13 +67,12 @@ void sdl_init(SDLContext *c)
 void sdl_end(SDLContext *c)
 {
     SDL_DestroyTexture(c->tiles);
-    SDL_DestroyTexture(c->buffer);
     SDL_DestroyRenderer(c->ren);
     SDL_DestroyWindow(c->win);
     SDL_Quit();
 }
 
-void sdl_draw_tile(SDLContext *c, int64_t *data)
+void sdl_draw_tile(SDLContext *c, int64_t *data, int *x_ball, int *x_paddle)
 {
     int x, y, tile;
     SDL_Rect src, dst;
@@ -88,6 +85,10 @@ void sdl_draw_tile(SDLContext *c, int64_t *data)
         printf("New score %d\n", tile);
         return;
     }
+    if (tile == 4)
+        *x_ball = x;
+    if (tile == 3)
+        *x_paddle = x;
     /* Tiles are arrenged horizontally in texture tile */
     src.x = tile * TILE_SIZE;
     src.y = 0;
@@ -104,68 +105,76 @@ void sdl_draw_tile(SDLContext *c, int64_t *data)
     SDL_RenderCopy(c->ren, c->tiles, &src, &dst);
 }
 
-void sdl_swap_buffer(SDLContext *c)
-{
-    SDL_SetRenderTarget(c->ren, NULL);
-    SDL_RenderClear(c->ren);
-    SDL_RenderCopy(c->ren, c->buffer, NULL, NULL);
-    SDL_RenderPresent(c->ren);
-    SDL_SetRenderTarget(c->ren, c->buffer);
-}
 
-int run_step(Context *ctx, int pc)
+int run_tick(Game *g, int pc)
 {
-    ctx->output_idx = 0;
-    pc = resume_till_output(ctx, pc);
-    if (pc < 0)
-        return -1;
-    pc = resume_till_output(ctx, pc);
-    if (pc < 0)
-        return -1;
-    pc = resume_till_output(ctx, pc);
+    int event;
+    while (pc >= 0) {
+        g->ctx.output_idx = 0;
+        event = INTCODE_EVENT_INPUT | INTCODE_EVENT_OUTPUT;
+        pc = resume_till_event(&g->ctx, &event, pc);
+        if (pc < 0)
+            return -1;
+        if (event == INTCODE_EVENT_INPUT)
+            break;
+        pc = resume_till_output(&g->ctx, pc);
+        pc = resume_till_output(&g->ctx, pc);
+
+        sdl_draw_tile(&g->sdl, g->ctx.output, &g->x_ball, &g->x_paddle);
+    }
     return pc;
 }
 
-int run_program(Context *ctx, SDLContext *c)
+void run_program(Game *g, int autoplay)
 {
     int pc = 0;
     int n_loop = 0;
     int64_t input = 0;
+    int x_ball, x_paddle;
     SDL_Event event;
 
     /* Main game loop */
     while (pc >= 0) {
-        /* Fetch input */
-        ctx->input[0] = input;
-        ctx->input_idx = 0;
-        input = 0;
-        
         /* Draw loop : run until another event is requested */
-        while (pc >= 0) {
-            pc = run_step(ctx, pc);
-            /* Don't draw the last tile, it will erase the ball ... */
-            if (ctx->input_idx != 0)
-                break;
-            sdl_draw_tile(c, ctx->output);
-        }
+        pc = run_tick(g, pc);
+        if (pc < 0)
+            break;
+        
         /* Display game */
-        sdl_swap_buffer(c);
-        /* Draw the last tile */
-        sdl_draw_tile(c, ctx->output);
-
-        /* Retrieve all the events of the last tick : last one wins */
-        while(SDL_PollEvent(&event))
-        {
-            if(event.type == SDL_KEYDOWN) {
-                SDL_KeyboardEvent *key = &event.key;
-                if (key->keysym.sym == SDLK_RIGHT)
-                    input = 1;
-                else if (key->keysym.sym == SDLK_LEFT)
-                    input = -1;
+        SDL_RenderPresent(g->sdl.ren);
+        
+        /* Wait and fetch input */
+        input = 0;
+        if (!autoplay) {
+            SDL_Delay(TICK_MS);
+            /* Retrieve all the events : last one wins */
+            while(SDL_PollEvent(&event))
+            {
+                if(event.type == SDL_KEYDOWN) {
+                    SDL_KeyboardEvent *key = &event.key;
+                    if (key->keysym.sym == SDLK_RIGHT)
+                        input = 1;
+                    else if (key->keysym.sym == SDLK_LEFT)
+                        input = -1;
+                } else if (event.type == SDL_QUIT) {
+                    printf("Force quit\n");
+                    return;
+                }
             }
+        } else {
+            SDL_Delay(TICK_MS/10);
+
+            if (g->x_paddle < g->x_ball)
+                input = 1;
+            else if (g->x_paddle > g->x_ball)
+                input = -1;
         }
-        /* Delay before next tick */
-        SDL_Delay(TICK_MS);
+
+        /* Run the single input instruction */
+        g->ctx.input[0] = input;
+        g->ctx.input_idx = 0;
+        pc = run_inst(&g->ctx, pc);
+
         n_loop++;
     }
 }
@@ -174,8 +183,7 @@ int run_program(Context *ctx, SDLContext *c)
 int main(int argc, char **argv)
 {
     int64_t *program;
-    Context ctx;
-    SDLContext c;
+    Game g;
     int size; 
     
     program = malloc(PROGRAM_SIZE * sizeof(int64_t));
@@ -187,17 +195,16 @@ int main(int argc, char **argv)
 
     program[0] = 2;
 
-    ctx.program = program;
-    ctx.relative_base = 0;
-    ctx.input = malloc(2 * sizeof(int64_t));
-    ctx.output = malloc(3 * sizeof(int64_t));
-    ctx.input_idx = 0;
+    g.ctx.program = program;
+    g.ctx.relative_base = 0;
+    g.ctx.input = malloc(1 * sizeof(int64_t));
+    g.ctx.output = malloc(3 * sizeof(int64_t));
 
-    sdl_init(&c);
+    sdl_init(&g.sdl);
     
-    run_program(&ctx, &c);
+    run_program(&g, atoi(argv[2]));
     
-    sdl_end(&c);
+    sdl_end(&g.sdl);
     free(program); 
 }
 
