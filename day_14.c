@@ -103,9 +103,10 @@ void print_reactions(Chemistry *c)
             Reactant *r = &p->reaction.reactants[j];
             printf("%d %s(%d), ", r->qty, c->products[r->idx].id.s, r->idx);
         }
-        printf(" => %d %s(%d)\n", p->reaction.qty, p->id.s, i);
+        printf(" => %d '%s'(%d)\n", p->reaction.qty, p->id.s, i);
     }
 }
+
 
 int parse_reactions(Chemistry *c, const char *filename)
 {
@@ -160,6 +161,69 @@ int parse_reactions(Chemistry *c, const char *filename)
     return c->n_products;
 }
 
+int produce(Chemistry *c, Product *p)
+{
+    int i, n;
+    Reaction *r;
+    Reactant *re;
+
+    n = p->needed - p->produced;
+    if (n <= 0)
+        return 0;
+
+    r = &p->reaction;
+    if (!r->qty)
+        return 0;
+    /* Get the number of reactions to run */
+    n = (n + r->qty - 1) / r->qty;
+    for (i = 0; i < r->n_reactants; i++) {
+        re = &r->reactants[i];
+        c->products[re->idx].needed += re->qty * n;
+    }
+    p->produced += n * r->qty;
+    return 1;
+}
+
+void compute_reactions(Chemistry *c)
+{
+    ProductID fuel_id, ore_id;
+    Product *fuel;
+    int idx, i;
+    int need_to_run, loop, ore_qty;
+
+    fuel_id.i = 0;
+    strcpy(fuel_id.s, "FUEL");
+    ore_id.i = 0;
+    strcpy(ore_id.s, "ORE");
+
+    idx = find_product(c, fuel_id);
+    if (idx < 0) {
+        printf("FUEL not found\n");
+        exit(1);
+    }
+    c->products[idx].needed = 1;
+    need_to_run = 1;
+    loop = 0;
+    while (need_to_run) {
+        need_to_run = 0;
+        for (i = 0; i < c->n_products; i++) {
+            if (produce(c, &c->products[i]))
+                need_to_run = 1;
+        }
+        loop++;
+    }
+
+    idx = find_product(c, ore_id);
+    if (idx < 0) {
+        printf("ORE not found\n");
+        exit(1);
+    }
+
+    ore_qty = c->products[idx].needed;
+    printf("Fuel produced after %d loops, need %d ore\n",
+            loop, ore_qty);
+}
+
 
 int main (int argc, char **argv)
 {
@@ -168,6 +232,8 @@ int main (int argc, char **argv)
     
     printf("%d reactions found\n", n_products);
     print_reactions(&c);
+
+    compute_reactions(&c);
 
     return 0;
 }
