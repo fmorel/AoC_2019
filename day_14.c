@@ -22,10 +22,14 @@ typedef union {
 } ProductID;
 
 typedef struct {
+    uint64_t needed;
+    uint64_t produced;
+} Quantity;
+
+typedef struct {
     ProductID id;
     Reaction reaction;
-    int needed;
-    int produced;
+    Quantity quantity;
 } Product;
 
 typedef struct {
@@ -33,6 +37,7 @@ typedef struct {
     int n_alloc;
     Product *products;
 } Chemistry;
+
 
 static int add_product(Chemistry *c, ProductID id)
 {
@@ -163,11 +168,12 @@ int parse_reactions(Chemistry *c, const char *filename)
 
 int produce(Chemistry *c, Product *p)
 {
-    int i, n;
+    int i;
+    int64_t n;
     Reaction *r;
     Reactant *re;
 
-    n = p->needed - p->produced;
+    n = p->quantity.needed - p->quantity.produced;
     if (n <= 0)
         return 0;
 
@@ -178,18 +184,19 @@ int produce(Chemistry *c, Product *p)
     n = (n + r->qty - 1) / r->qty;
     for (i = 0; i < r->n_reactants; i++) {
         re = &r->reactants[i];
-        c->products[re->idx].needed += re->qty * n;
+        c->products[re->idx].quantity.needed += re->qty * n;
     }
-    p->produced += n * r->qty;
+    p->quantity.produced += n * r->qty;
     return 1;
 }
 
-void compute_reactions(Chemistry *c)
+uint64_t compute_reactions(Chemistry *c, int n_fuel)
 {
     ProductID fuel_id, ore_id;
     Product *fuel;
     int idx, i;
-    int need_to_run, loop, ore_qty;
+    int need_to_run, loop;
+    uint64_t ore_qty;
 
     fuel_id.i = 0;
     strcpy(fuel_id.s, "FUEL");
@@ -201,7 +208,7 @@ void compute_reactions(Chemistry *c)
         printf("FUEL not found\n");
         exit(1);
     }
-    c->products[idx].needed = 1;
+    c->products[idx].quantity.needed = n_fuel;
     need_to_run = 1;
     loop = 0;
     while (need_to_run) {
@@ -219,22 +226,55 @@ void compute_reactions(Chemistry *c)
         exit(1);
     }
 
-    ore_qty = c->products[idx].needed;
-    printf("Fuel produced after %d loops, need %d ore\n",
-            loop, ore_qty);
+    ore_qty = c->products[idx].quantity.needed;
+    return ore_qty;
+    //printf("Fuel produced after %d loops, need %d ore\n",
+    //        loop, ore_qty);
 }
 
+void pop_quantities(Chemistry *c)
+{
+    int i;
+    for (i = 0; i < c->n_products; i++) {
+        c->products[i].quantity.needed = 0;
+        c->products[i].quantity.produced = 0;
+    }
+}
+
+#define ORE_LIMIT 1000000000000LL
 
 int main (int argc, char **argv)
 {
     Chemistry c;
-    int n_products = parse_reactions(&c, argv[1]);
+    int n_products, n_iter;
+    uint64_t ore_qty, cur_fuel, incr;
     
+    n_products = parse_reactions(&c, argv[1]);
     printf("%d reactions found\n", n_products);
     print_reactions(&c);
 
-    compute_reactions(&c);
+    /* Step 1 */
+    ore_qty = compute_reactions(&c, 1);
+    printf("Ore qty for 1 fuel %ld\n", ore_qty);
 
+    /* Step 2 : iteration with dichotomy */
+    cur_fuel = ORE_LIMIT / ore_qty;
+    incr = cur_fuel / 2;
+    n_iter = 0;
+    for (;;) {
+        pop_quantities(&c);
+        ore_qty = compute_reactions(&c, cur_fuel);
+        if (ore_qty < ORE_LIMIT)
+            cur_fuel += incr;
+        if (ore_qty > ORE_LIMIT) {
+            if (incr == 1)
+                break;
+            incr /= 2;
+            cur_fuel -= incr + 1; 
+        }
+        n_iter++;
+    }
+    printf("Fuel for %ld is %ld (n_iter %d)\n", ORE_LIMIT, cur_fuel-1, n_iter);
     return 0;
 }
 
